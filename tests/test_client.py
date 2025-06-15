@@ -1,25 +1,218 @@
 """Tests for the Notion API client."""
 
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
+
+import httpx
 import pytest
 
-from notion_to_json.client import NotionClient
+from notion_to_json.client import NotionClient, RateLimiter
+
+
+class TestRateLimiter:
+    """Test cases for RateLimiter."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_enforces_interval(self):
+        """Test that rate limiter enforces minimum interval between requests."""
+        rate_limiter = RateLimiter(requests_per_second=10.0)  # 0.1 second interval
+
+        start_time = asyncio.get_event_loop().time()
+        await rate_limiter.acquire()
+        await rate_limiter.acquire()
+        end_time = asyncio.get_event_loop().time()
+
+        # Second acquire should wait at least 0.1 seconds
+        assert end_time - start_time >= 0.09  # Allow small margin
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_concurrent_requests(self):
+        """Test that rate limiter handles concurrent requests properly."""
+        rate_limiter = RateLimiter(requests_per_second=10.0)
+
+        async def make_request():
+            await rate_limiter.acquire()
+            return asyncio.get_event_loop().time()
+
+        # Make 3 concurrent requests
+        times = await asyncio.gather(
+            make_request(),
+            make_request(),
+            make_request(),
+        )
+
+        # Each request should be at least 0.1 seconds apart
+        for i in range(1, len(times)):
+            assert times[i] - times[i-1] >= 0.09
 
 
 class TestNotionClient:
     """Test cases for NotionClient."""
 
     def test_client_initialization(self):
-        """Test that client initializes with API key."""
+        """Test that client initializes with API key and proper configuration."""
         api_key = "test-api-key"
         client = NotionClient(api_key)
 
         assert client.api_key == api_key
         assert client.base_url == "https://api.notion.com/v1"
+        assert isinstance(client.rate_limiter, RateLimiter)
+        assert isinstance(client.client, httpx.AsyncClient)
+
+    def test_headers_configuration(self):
+        """Test that headers are properly configured."""
+        api_key = "test-api-key"
+        client = NotionClient(api_key)
+        headers = client._get_headers()
+
+        assert headers["Authorization"] == f"Bearer {api_key}"
+        assert headers["Notion-Version"] == "2022-06-28"
+        assert headers["Content-Type"] == "application/json"
 
     @pytest.mark.asyncio
-    async def test_request_not_implemented(self):
-        """Test that request method raises NotImplementedError."""
+    async def test_successful_request(self):
+        """Test successful API request."""
         client = NotionClient("test-api-key")
 
-        with pytest.raises(NotImplementedError):
-            await client.request("GET", "/users")
+        # Mock the httpx response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": [{"id": "user1"}]}
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            result = await client.request("GET", "/users")
+
+        assert result == {"results": [{"id": "user1"}]}
+        mock_request.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_handling(self):
+        """Test that client handles rate limit (429) responses."""
+        client = NotionClient("test-api-key")
+
+        # Mock rate limit response followed by success
+        mock_rate_limit = Mock()
+        mock_rate_limit.status_code = 429
+        mock_rate_limit.headers = {"Retry-After": "1"}
+
+        mock_success = Mock()
+        mock_success.status_code = 200
+        mock_success.json.return_value = {"success": True}
+        mock_success.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[mock_rate_limit, mock_success])
+        with patch.object(client.client, "request", mock_request):
+            with patch("asyncio.sleep", AsyncMock()):  # Speed up test
+                result = await client.request("GET", "/test")
+
+        assert result == {"success": True}
+        assert mock_request.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_on_server_error(self):
+        """Test that client retries on server errors (5xx)."""
+        client = NotionClient("test-api-key")
+
+        # Mock server error followed by success
+        mock_error = Mock()
+        mock_error.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Server Error",
+            request=Mock(),
+            response=Mock(status_code=500)
+        )
+
+        mock_success = Mock()
+        mock_success.status_code = 200
+        mock_success.json.return_value = {"success": True}
+        mock_success.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[mock_error, mock_success])
+        with patch.object(client.client, "request", mock_request):
+            with patch("asyncio.sleep", AsyncMock()):  # Speed up test
+                result = await client.request("GET", "/test", retry_count=1)
+
+        assert result == {"success": True}
+        assert mock_request.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_client_error(self):
+        """Test that client doesn't retry on client errors (4xx)."""
+        client = NotionClient("test-api-key")
+
+        # Mock client error
+        mock_error = Mock()
+        mock_error.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Bad Request",
+            request=Mock(),
+            response=Mock(status_code=400)
+        )
+
+        mock_request = AsyncMock(return_value=mock_error)
+        with patch.object(client.client, "request", mock_request):
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.request("GET", "/test")
+
+        # Should only try once for client errors
+        mock_request.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_retry_on_network_error(self):
+        """Test that client retries on network errors."""
+        client = NotionClient("test-api-key")
+
+        # Mock network error followed by success
+        mock_success = Mock()
+        mock_success.status_code = 200
+        mock_success.json.return_value = {"success": True}
+        mock_success.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[httpx.RequestError("Network error"), mock_success])
+        with patch.object(client.client, "request", mock_request):
+            with patch("asyncio.sleep", AsyncMock()):  # Speed up test
+                result = await client.request("GET", "/test", retry_count=1)
+
+        assert result == {"success": True}
+        assert mock_request.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_users(self):
+        """Test get_users method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": [{"id": "user1", "name": "Test User"}]}
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            result = await client.get_users()
+
+        assert result == {"results": [{"id": "user1", "name": "Test User"}]}
+        mock_request.assert_called_with(
+            method="GET",
+            url="https://api.notion.com/v1/users",
+            json=None,
+            params=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self):
+        """Test that client works as async context manager."""
+        api_key = "test-api-key"
+
+        async with NotionClient(api_key) as client:
+            assert client.api_key == api_key
+
+        # Client should be closed after exiting context
+        assert client.client.is_closed
+
+    @pytest.mark.asyncio
+    async def test_close_method(self):
+        """Test that close method properly closes the client."""
+        client = NotionClient("test-api-key")
+        await client.close()
+
+        assert client.client.is_closed
