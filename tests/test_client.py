@@ -216,3 +216,123 @@ class TestNotionClient:
         await client.close()
 
         assert client.client.is_closed
+
+    @pytest.mark.asyncio
+    async def test_search_method(self):
+        """Test search method with various parameters."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [{"id": "page1", "object": "page"}],
+            "has_more": False,
+            "next_cursor": None,
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            result = await client.search(filter_type="page", query="test", page_size=50)
+
+        assert result["results"][0]["id"] == "page1"
+        mock_request.assert_called_with(
+            method="POST",
+            url="https://api.notion.com/v1/search",
+            json={
+                "page_size": 50,
+                "filter": {"property": "object", "value": "page"},
+                "query": "test",
+            },
+            params=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_search_all_with_pagination(self):
+        """Test search_all handles pagination correctly."""
+        client = NotionClient("test-api-key")
+
+        # First response with more pages
+        mock_response1 = Mock()
+        mock_response1.status_code = 200
+        mock_response1.json.return_value = {
+            "results": [{"id": "page1"}, {"id": "page2"}],
+            "has_more": True,
+            "next_cursor": "cursor123",
+        }
+        mock_response1.raise_for_status = Mock()
+
+        # Second response without more pages
+        mock_response2 = Mock()
+        mock_response2.status_code = 200
+        mock_response2.json.return_value = {
+            "results": [{"id": "page3"}],
+            "has_more": False,
+            "next_cursor": None,
+        }
+        mock_response2.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[mock_response1, mock_response2])
+        with patch.object(client.client, "request", mock_request):
+            results = await client.search_all(filter_type="page")
+
+        assert len(results) == 3
+        assert results[0]["id"] == "page1"
+        assert results[1]["id"] == "page2"
+        assert results[2]["id"] == "page3"
+
+        # Verify both calls were made
+        assert mock_request.call_count == 2
+
+        # Check second call included cursor
+        second_call_json = mock_request.call_args_list[1][1]["json"]
+        assert second_call_json["start_cursor"] == "cursor123"
+
+    @pytest.mark.asyncio
+    async def test_search_pages(self):
+        """Test search_pages method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [{"id": "page1", "object": "page"}],
+            "has_more": False,
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            pages = await client.search_pages(query="test")
+
+        assert len(pages) == 1
+        assert pages[0]["id"] == "page1"
+
+        # Verify filter was set correctly
+        call_json = mock_request.call_args[1]["json"]
+        assert call_json["filter"]["value"] == "page"
+        assert call_json["query"] == "test"
+
+    @pytest.mark.asyncio
+    async def test_search_databases(self):
+        """Test search_databases method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [{"id": "db1", "object": "database"}],
+            "has_more": False,
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            databases = await client.search_databases()
+
+        assert len(databases) == 1
+        assert databases[0]["id"] == "db1"
+
+        # Verify filter was set correctly
+        call_json = mock_request.call_args[1]["json"]
+        assert call_json["filter"]["value"] == "database"

@@ -47,6 +47,9 @@ notion-to-json --output-dir ./my-exports
 
 # Test API connection only
 notion-to-json --test --api-key "your-integration-token"
+
+# Search and list all pages and databases
+notion-to-json --search --api-key "your-integration-token"
 ```
 
 ### Getting a Notion API Key
@@ -94,7 +97,7 @@ notion-to-json/
 
 - [x] Phase 1: Project setup and structure
 - [x] Phase 2: Notion API client implementation
-- [ ] Phase 3: Content discovery (pages & databases)
+- [x] Phase 3: Content discovery (pages & databases)
 - [ ] Phase 4: Full content retrieval
 - [ ] Phase 5: JSON export functionality
 - [ ] Phase 6: CLI enhancements and distribution

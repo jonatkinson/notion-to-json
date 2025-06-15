@@ -146,6 +146,97 @@ class NotionClient:
         """
         return await self.request("GET", "/users")
 
+    async def search(
+        self,
+        filter_type: str | None = None,
+        query: str | None = None,
+        start_cursor: str | None = None,
+        page_size: int = 100,
+    ) -> dict:
+        """Search for objects in Notion.
+
+        Args:
+            filter_type: Type of object to filter ("page" or "database")
+            query: Text query to search for
+            start_cursor: Pagination cursor
+            page_size: Number of results per page (max 100)
+
+        Returns:
+            Dictionary with search results
+        """
+        payload: dict[str, Any] = {
+            "page_size": min(page_size, 100),  # API max is 100
+        }
+
+        if filter_type:
+            payload["filter"] = {
+                "property": "object",
+                "value": filter_type,
+            }
+
+        if query:
+            payload["query"] = query
+
+        if start_cursor:
+            payload["start_cursor"] = start_cursor
+
+        return await self.request("POST", "/search", json=payload)
+
+    async def search_all(
+        self,
+        filter_type: str | None = None,
+        query: str | None = None,
+    ) -> list[dict]:
+        """Search for all objects, handling pagination automatically.
+
+        Args:
+            filter_type: Type of object to filter ("page" or "database")
+            query: Text query to search for
+
+        Returns:
+            List of all results
+        """
+        all_results = []
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            response = await self.search(
+                filter_type=filter_type,
+                query=query,
+                start_cursor=start_cursor,
+            )
+
+            results = response.get("results", [])
+            all_results.extend(results)
+
+            has_more = response.get("has_more", False)
+            start_cursor = response.get("next_cursor")
+
+        return all_results
+
+    async def search_pages(self, query: str | None = None) -> list[dict]:
+        """Search for all pages in the workspace.
+
+        Args:
+            query: Optional text query to search for
+
+        Returns:
+            List of all pages
+        """
+        return await self.search_all(filter_type="page", query=query)
+
+    async def search_databases(self, query: str | None = None) -> list[dict]:
+        """Search for all databases in the workspace.
+
+        Args:
+            query: Optional text query to search for
+
+        Returns:
+            List of all databases
+        """
+        return await self.search_all(filter_type="database", query=query)
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self.client.aclose()
