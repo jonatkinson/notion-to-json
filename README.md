@@ -50,6 +50,24 @@ notion-to-json --test --api-key "your-integration-token"
 
 # Search and list all pages and databases
 notion-to-json --search --api-key "your-integration-token"
+
+# List ALL pages (not just first 10) and databases
+notion-to-json --list-all --api-key "your-integration-token"
+
+# Save search results to a JSON file
+notion-to-json --search --save-list "notion-content.json" --api-key "your-integration-token"
+
+# Retrieve specific page content
+notion-to-json --get-page "page-id-here" --api-key "your-integration-token"
+
+# Save page content to file
+notion-to-json --get-page "page-id-here" -o "page-content.json" --api-key "your-integration-token"
+
+# Retrieve specific database content
+notion-to-json --get-database "database-id-here" --api-key "your-integration-token"
+
+# Save database content to file  
+notion-to-json --get-database "database-id-here" -o "database-content.json" --api-key "your-integration-token"
 ```
 
 ### Getting a Notion API Key
@@ -98,7 +116,7 @@ notion-to-json/
 - [x] Phase 1: Project setup and structure
 - [x] Phase 2: Notion API client implementation
 - [x] Phase 3: Content discovery (pages & databases)
-- [ ] Phase 4: Full content retrieval
+- [x] Phase 4: Full content retrieval
 - [ ] Phase 5: JSON export functionality
 - [ ] Phase 6: CLI enhancements and distribution
 

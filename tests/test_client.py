@@ -336,3 +336,222 @@ class TestNotionClient:
         # Verify filter was set correctly
         call_json = mock_request.call_args[1]["json"]
         assert call_json["filter"]["value"] == "database"
+
+    @pytest.mark.asyncio
+    async def test_get_page_blocks(self):
+        """Test get_page_blocks method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [
+                {"id": "block1", "type": "paragraph", "has_children": False},
+                {"id": "block2", "type": "heading_1", "has_children": False},
+            ],
+            "has_more": False,
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            blocks = await client.get_page_blocks("page123")
+
+        assert blocks["results"][0]["id"] == "block1"
+        assert blocks["results"][1]["type"] == "heading_1"
+        mock_request.assert_called_with(
+            method="GET",
+            url="https://api.notion.com/v1/blocks/page123/children",
+            json=None,
+            params={"page_size": 100},
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_all_page_blocks_with_pagination(self):
+        """Test get_all_page_blocks handles pagination."""
+        client = NotionClient("test-api-key")
+
+        # First response with more blocks
+        mock_response1 = Mock()
+        mock_response1.status_code = 200
+        mock_response1.json.return_value = {
+            "results": [{"id": "block1"}, {"id": "block2"}],
+            "has_more": True,
+            "next_cursor": "cursor123",
+        }
+        mock_response1.raise_for_status = Mock()
+
+        # Second response without more blocks
+        mock_response2 = Mock()
+        mock_response2.status_code = 200
+        mock_response2.json.return_value = {
+            "results": [{"id": "block3"}],
+            "has_more": False,
+        }
+        mock_response2.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[mock_response1, mock_response2])
+        with patch.object(client.client, "request", mock_request):
+            blocks = await client.get_all_page_blocks("page123")
+
+        assert len(blocks) == 3
+        assert blocks[0]["id"] == "block1"
+        assert blocks[2]["id"] == "block3"
+
+    @pytest.mark.asyncio
+    async def test_get_page_content_recursive(self):
+        """Test recursive page content retrieval."""
+        client = NotionClient("test-api-key")
+
+        # Mock response for parent page blocks
+        parent_blocks = Mock()
+        parent_blocks.status_code = 200
+        parent_blocks.json.return_value = {
+            "results": [
+                {"id": "block1", "type": "paragraph", "has_children": False},
+                {"id": "block2", "type": "toggle", "has_children": True},
+            ],
+            "has_more": False,
+        }
+        parent_blocks.raise_for_status = Mock()
+
+        # Mock response for child blocks
+        child_blocks = Mock()
+        child_blocks.status_code = 200
+        child_blocks.json.return_value = {
+            "results": [
+                {"id": "child1", "type": "paragraph", "has_children": False},
+            ],
+            "has_more": False,
+        }
+        child_blocks.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[parent_blocks, child_blocks])
+        with patch.object(client.client, "request", mock_request):
+            content = await client.get_page_content_recursive("page123")
+
+        assert len(content["blocks"]) == 2
+        assert content["blocks"][1]["has_children"] is True
+        assert len(content["blocks"][1]["children"]) == 1
+        assert content["blocks"][1]["children"][0]["id"] == "child1"
+
+    @pytest.mark.asyncio
+    async def test_query_database(self):
+        """Test query_database method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [
+                {"id": "entry1", "properties": {}},
+                {"id": "entry2", "properties": {}},
+            ],
+            "has_more": False,
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            entries = await client.query_database(
+                "db123",
+                filter_obj={"property": "Status", "select": {"equals": "Done"}},
+                sorts=[{"property": "Created", "direction": "descending"}],
+            )
+
+        assert len(entries["results"]) == 2
+        call_json = mock_request.call_args[1]["json"]
+        assert call_json["filter"]["property"] == "Status"
+        assert call_json["sorts"][0]["direction"] == "descending"
+
+    @pytest.mark.asyncio
+    async def test_get_all_database_entries(self):
+        """Test get_all_database_entries with pagination."""
+        client = NotionClient("test-api-key")
+
+        # First response
+        mock_response1 = Mock()
+        mock_response1.status_code = 200
+        mock_response1.json.return_value = {
+            "results": [{"id": "entry1"}, {"id": "entry2"}],
+            "has_more": True,
+            "next_cursor": "cursor456",
+        }
+        mock_response1.raise_for_status = Mock()
+
+        # Second response
+        mock_response2 = Mock()
+        mock_response2.status_code = 200
+        mock_response2.json.return_value = {
+            "results": [{"id": "entry3"}],
+            "has_more": False,
+        }
+        mock_response2.raise_for_status = Mock()
+
+        mock_request = AsyncMock(side_effect=[mock_response1, mock_response2])
+        with patch.object(client.client, "request", mock_request):
+            entries = await client.get_all_database_entries("db123")
+
+        assert len(entries) == 3
+        assert entries[0]["id"] == "entry1"
+        assert entries[2]["id"] == "entry3"
+
+    @pytest.mark.asyncio
+    async def test_get_database(self):
+        """Test get_database method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": "db123",
+            "title": [{"plain_text": "Test Database"}],
+            "properties": {
+                "Name": {"id": "title", "type": "title"},
+                "Status": {"id": "status", "type": "select"},
+            },
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            database = await client.get_database("db123")
+
+        assert database["id"] == "db123"
+        assert database["properties"]["Name"]["type"] == "title"
+        mock_request.assert_called_with(
+            method="GET",
+            url="https://api.notion.com/v1/databases/db123",
+            json=None,
+            params=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_page(self):
+        """Test get_page method."""
+        client = NotionClient("test-api-key")
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": "page123",
+            "properties": {
+                "title": {
+                    "title": [{"plain_text": "Test Page"}],
+                },
+            },
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_request = AsyncMock(return_value=mock_response)
+        with patch.object(client.client, "request", mock_request):
+            page = await client.get_page("page123")
+
+        assert page["id"] == "page123"
+        assert page["properties"]["title"]["title"][0]["plain_text"] == "Test Page"
+        mock_request.assert_called_with(
+            method="GET",
+            url="https://api.notion.com/v1/pages/page123",
+            json=None,
+            params=None,
+        )

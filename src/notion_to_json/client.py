@@ -237,6 +237,165 @@ class NotionClient:
         """
         return await self.search_all(filter_type="database", query=query)
 
+    async def get_page_blocks(
+        self,
+        page_id: str,
+        start_cursor: str | None = None,
+        page_size: int = 100,
+    ) -> dict:
+        """Get blocks (content) from a page.
+
+        Args:
+            page_id: ID of the page
+            start_cursor: Pagination cursor
+            page_size: Number of results per page (max 100)
+
+        Returns:
+            Dictionary with block data
+        """
+        params = {"page_size": min(page_size, 100)}
+        if start_cursor:
+            params["start_cursor"] = start_cursor
+
+        return await self.request("GET", f"/blocks/{page_id}/children", params=params)
+
+    async def get_all_page_blocks(self, page_id: str) -> list[dict]:
+        """Get all blocks from a page, handling pagination.
+
+        Args:
+            page_id: ID of the page
+
+        Returns:
+            List of all blocks in the page
+        """
+        all_blocks = []
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            response = await self.get_page_blocks(page_id, start_cursor=start_cursor)
+            blocks = response.get("results", [])
+            all_blocks.extend(blocks)
+            has_more = response.get("has_more", False)
+            start_cursor = response.get("next_cursor")
+
+        return all_blocks
+
+    async def get_page_content_recursive(self, page_id: str) -> dict:
+        """Get page content including nested blocks recursively.
+
+        Args:
+            page_id: ID of the page
+
+        Returns:
+            Dictionary with page content and all nested blocks
+        """
+        # Get top-level blocks
+        blocks = await self.get_all_page_blocks(page_id)
+
+        # Recursively get children for blocks that can have children
+        for block in blocks:
+            if block.get("has_children", False):
+                block_id = block.get("id")
+                if block_id:
+                    # Recursively get children
+                    block["children"] = await self.get_all_page_blocks(block_id)
+                    # Continue recursion for nested blocks
+                    for child_block in block["children"]:
+                        if child_block.get("has_children", False):
+                            child_id = child_block.get("id")
+                            if child_id:
+                                child_block["children"] = await self.get_page_content_recursive(child_id)
+
+        return {"blocks": blocks}
+
+    async def query_database(
+        self,
+        database_id: str,
+        start_cursor: str | None = None,
+        page_size: int = 100,
+        filter_obj: dict | None = None,
+        sorts: list[dict] | None = None,
+    ) -> dict:
+        """Query a database for its entries.
+
+        Args:
+            database_id: ID of the database
+            start_cursor: Pagination cursor
+            page_size: Number of results per page (max 100)
+            filter_obj: Filter conditions
+            sorts: Sort conditions
+
+        Returns:
+            Dictionary with database entries
+        """
+        payload: dict[str, Any] = {"page_size": min(page_size, 100)}
+
+        if start_cursor:
+            payload["start_cursor"] = start_cursor
+        if filter_obj:
+            payload["filter"] = filter_obj
+        if sorts:
+            payload["sorts"] = sorts
+
+        return await self.request("POST", f"/databases/{database_id}/query", json=payload)
+
+    async def get_all_database_entries(
+        self,
+        database_id: str,
+        filter_obj: dict | None = None,
+        sorts: list[dict] | None = None,
+    ) -> list[dict]:
+        """Get all entries from a database, handling pagination.
+
+        Args:
+            database_id: ID of the database
+            filter_obj: Filter conditions
+            sorts: Sort conditions
+
+        Returns:
+            List of all database entries
+        """
+        all_entries = []
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            response = await self.query_database(
+                database_id,
+                start_cursor=start_cursor,
+                filter_obj=filter_obj,
+                sorts=sorts,
+            )
+            entries = response.get("results", [])
+            all_entries.extend(entries)
+            has_more = response.get("has_more", False)
+            start_cursor = response.get("next_cursor")
+
+        return all_entries
+
+    async def get_database(self, database_id: str) -> dict:
+        """Get database schema and properties.
+
+        Args:
+            database_id: ID of the database
+
+        Returns:
+            Dictionary with database metadata
+        """
+        return await self.request("GET", f"/databases/{database_id}")
+
+    async def get_page(self, page_id: str) -> dict:
+        """Get page metadata and properties.
+
+        Args:
+            page_id: ID of the page
+
+        Returns:
+            Dictionary with page metadata
+        """
+        return await self.request("GET", f"/pages/{page_id}")
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self.client.aclose()
