@@ -35,7 +35,7 @@ uvx notion-to-json --api-key YOUR_API_KEY
 ### Basic usage
 
 ```bash
-# Using environment variable
+# Export entire workspace (default)
 export NOTION_API_KEY="your-integration-token"
 notion-to-json
 
@@ -44,6 +44,11 @@ notion-to-json --api-key "your-integration-token"
 
 # Specify output directory
 notion-to-json --output-dir ./my-exports
+
+# Export creates:
+# - exports/pages/       # Individual page JSON files
+# - exports/databases/   # Individual database JSON files  
+# - exports/manifest.json # Export summary and metadata
 
 # Test API connection only
 notion-to-json --test --api-key "your-integration-token"
@@ -117,7 +122,7 @@ notion-to-json/
 - [x] Phase 2: Notion API client implementation
 - [x] Phase 3: Content discovery (pages & databases)
 - [x] Phase 4: Full content retrieval
-- [ ] Phase 5: JSON export functionality
+- [x] Phase 5: JSON export functionality
 - [ ] Phase 6: CLI enhancements and distribution
 
 ## License

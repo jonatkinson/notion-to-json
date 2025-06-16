@@ -13,6 +13,7 @@ from rich.table import Table
 
 from notion_to_json import __version__
 from notion_to_json.client import NotionClient
+from notion_to_json.exporter import JSONExporter
 
 console = Console()
 
@@ -316,6 +317,37 @@ async def retrieve_database_content(api_key: str, database_id: str, output_file:
                 raise
 
 
+async def export_workspace(api_key: str, output_dir: str) -> None:
+    """Export entire workspace to JSON files.
+
+    Args:
+        api_key: Notion API key
+        output_dir: Directory to save exported files
+    """
+    async with NotionClient(api_key) as client:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # Discover all content
+            discovery_task = progress.add_task("[cyan]Discovering workspace content...", total=None)
+            
+            # Get all pages
+            pages = await client.search_pages()
+            
+            # Get all databases
+            databases = await client.search_databases()
+            
+            progress.remove_task(discovery_task)
+            
+            console.print(f"\n[bold]Discovered {len(pages)} pages and {len(databases)} databases[/bold]")
+        
+        # Create exporter and export everything
+        exporter = JSONExporter(output_dir)
+        await exporter.export_workspace(client, pages, databases)
+
+
 @click.command()
 @click.version_option(version=__version__)
 @click.option(
@@ -398,6 +430,7 @@ def main(
         # Search mode - discover all content
         asyncio.run(search_workspace(api_key, show_all=list_all, save_path=save_list))
     else:
+        # Default behavior - export entire workspace
         console.print(f"Output directory: {output_dir}")
 
         # Test connection first
@@ -406,7 +439,8 @@ def main(
             console.print("[red]Please check your API key and try again.[/red]")
             sys.exit(1)
 
-        console.print("\n[yellow]Full export functionality will be implemented in Phase 5[/yellow]")
+        # Export workspace
+        asyncio.run(export_workspace(api_key, output_dir))
 
 
 if __name__ == "__main__":
