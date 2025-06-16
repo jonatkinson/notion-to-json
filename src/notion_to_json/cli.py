@@ -2,11 +2,12 @@
 
 import asyncio
 import json
+import re
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 
 import click
-from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
@@ -14,8 +15,65 @@ from rich.table import Table
 from notion_to_json import __version__
 from notion_to_json.client import NotionClient
 from notion_to_json.exporter import JSONExporter
+from notion_to_json.logging import console, get_logger, setup_logging
 
-console = Console()
+logger = get_logger(__name__)
+
+
+def filter_items(
+    items: list[dict],
+    include_pattern: str | None = None,
+    exclude_pattern: str | None = None,
+    modified_after: datetime | None = None,
+) -> list[dict]:
+    """Filter items based on criteria.
+
+    Args:
+        items: List of items to filter
+        include_pattern: Regex pattern for titles to include
+        exclude_pattern: Regex pattern for titles to exclude
+        modified_after: Only include items modified after this date
+
+    Returns:
+        Filtered list of items
+    """
+    filtered = []
+
+    include_re = re.compile(include_pattern, re.IGNORECASE) if include_pattern else None
+    exclude_re = re.compile(exclude_pattern, re.IGNORECASE) if exclude_pattern else None
+
+    for item in items:
+        # Extract title
+        title = extract_title(item) if "properties" in item else extract_database_title(item)
+
+        # Apply include pattern
+        if include_re and not include_re.search(title):
+            logger.debug(f"Skipping '{title}' - doesn't match include pattern")
+            continue
+
+        # Apply exclude pattern
+        if exclude_re and exclude_re.search(title):
+            logger.debug(f"Skipping '{title}' - matches exclude pattern")
+            continue
+
+        # Apply date filter
+        if modified_after:
+            last_edited = item.get("last_edited_time", "")
+            if last_edited:
+                item_date = datetime.fromisoformat(last_edited.replace("Z", "+00:00"))
+                # Make modified_after timezone-aware if it isn't
+                if modified_after.tzinfo is None:
+                    modified_after_tz = modified_after.replace(tzinfo=UTC)
+                else:
+                    modified_after_tz = modified_after
+
+                if item_date < modified_after_tz:
+                    logger.debug(f"Skipping '{title}' - modified before {modified_after}")
+                    continue
+
+        filtered.append(item)
+
+    return filtered
 
 
 async def test_connection(api_key: str) -> bool:
@@ -317,12 +375,23 @@ async def retrieve_database_content(api_key: str, database_id: str, output_file:
                 raise
 
 
-async def export_workspace(api_key: str, output_dir: str) -> None:
+async def export_workspace(
+    api_key: str,
+    output_dir: str,
+    filter_type: str = "all",
+    include_pattern: str | None = None,
+    exclude_pattern: str | None = None,
+    modified_after: datetime | None = None,
+) -> None:
     """Export entire workspace to JSON files.
 
     Args:
         api_key: Notion API key
         output_dir: Directory to save exported files
+        filter_type: Type of content to export ("page", "database", or "all")
+        include_pattern: Regex pattern for titles to include
+        exclude_pattern: Regex pattern for titles to exclude
+        modified_after: Only export items modified after this date
     """
     async with NotionClient(api_key) as client:
         with Progress(
@@ -332,17 +401,35 @@ async def export_workspace(api_key: str, output_dir: str) -> None:
         ) as progress:
             # Discover all content
             discovery_task = progress.add_task("[cyan]Discovering workspace content...", total=None)
-            
-            # Get all pages
-            pages = await client.search_pages()
-            
-            # Get all databases
-            databases = await client.search_databases()
-            
+
+            pages = []
+            databases = []
+
+            # Get pages if needed
+            if filter_type in ["all", "page"]:
+                pages = await client.search_pages()
+                logger.info(f"Found {len(pages)} pages")
+
+            # Get databases if needed
+            if filter_type in ["all", "database"]:
+                databases = await client.search_databases()
+                logger.info(f"Found {len(databases)} databases")
+
             progress.remove_task(discovery_task)
-            
-            console.print(f"\n[bold]Discovered {len(pages)} pages and {len(databases)} databases[/bold]")
-        
+
+            # Apply filters
+            if include_pattern or exclude_pattern or modified_after:
+                original_page_count = len(pages)
+                original_db_count = len(databases)
+
+                pages = filter_items(pages, include_pattern, exclude_pattern, modified_after)
+                databases = filter_items(databases, include_pattern, exclude_pattern, modified_after)
+
+                logger.info(f"After filtering: {len(pages)}/{original_page_count} pages, "
+                          f"{len(databases)}/{original_db_count} databases")
+
+            console.print(f"\n[bold]Will export {len(pages)} pages and {len(databases)} databases[/bold]")
+
         # Create exporter and export everything
         exporter = JSONExporter(output_dir)
         await exporter.export_workspace(client, pages, databases)
@@ -396,6 +483,42 @@ async def export_workspace(api_key: str, output_dir: str) -> None:
     type=click.Path(),
     help="Output file for page/database content",
 )
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose logging",
+)
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="Minimize output (errors only)",
+)
+@click.option(
+    "--log-file",
+    type=click.Path(),
+    help="Write logs to file",
+)
+@click.option(
+    "--filter-type",
+    type=click.Choice(["page", "database", "all"]),
+    default="all",
+    help="Export only specific type of content",
+)
+@click.option(
+    "--include-pattern",
+    help="Only export items with titles matching this pattern (regex)",
+)
+@click.option(
+    "--exclude-pattern",
+    help="Skip items with titles matching this pattern (regex)",
+)
+@click.option(
+    "--modified-after",
+    type=click.DateTime(),
+    help="Only export items modified after this date",
+)
 def main(
     api_key: str,
     output_dir: str,
@@ -406,14 +529,32 @@ def main(
     get_page: str | None,
     get_database: str | None,
     output: str | None,
+    verbose: bool,
+    quiet: bool,
+    log_file: str | None,
+    filter_type: str,
+    include_pattern: str | None,
+    exclude_pattern: str | None,
+    modified_after: datetime | None,
 ) -> None:
     """Export Notion pages and databases to JSON."""
-    console.print(
-        Panel(
-            f"[bold green]Notion to JSON Exporter v{__version__}[/bold green]",
-            expand=False,
+    # Setup logging first
+    setup_logging(verbose=verbose, quiet=quiet, log_file=Path(log_file) if log_file else None)
+
+    # Validate mutually exclusive options
+    if verbose and quiet:
+        console.print("[red]Error: Cannot use --verbose and --quiet together[/red]")
+        sys.exit(1)
+
+    if not quiet:
+        console.print(
+            Panel(
+                f"[bold green]Notion to JSON Exporter v{__version__}[/bold green]",
+                expand=False,
+            )
         )
-    )
+
+    logger.info(f"Starting notion-to-json v{__version__}")
 
     # Run async code
     if test:
@@ -439,8 +580,15 @@ def main(
             console.print("[red]Please check your API key and try again.[/red]")
             sys.exit(1)
 
-        # Export workspace
-        asyncio.run(export_workspace(api_key, output_dir))
+        # Export workspace with filters
+        asyncio.run(export_workspace(
+            api_key,
+            output_dir,
+            filter_type=filter_type,
+            include_pattern=include_pattern,
+            exclude_pattern=exclude_pattern,
+            modified_after=modified_after,
+        ))
 
 
 if __name__ == "__main__":

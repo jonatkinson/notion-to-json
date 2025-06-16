@@ -75,6 +75,35 @@ notion-to-json --get-database "database-id-here" --api-key "your-integration-tok
 notion-to-json --get-database "database-id-here" -o "database-content.json" --api-key "your-integration-token"
 ```
 
+### Advanced options
+
+```bash
+# Verbose logging
+notion-to-json --verbose
+
+# Quiet mode (errors only)
+notion-to-json --quiet
+
+# Log to file
+notion-to-json --log-file export.log
+
+# Export only pages
+notion-to-json --filter-type page
+
+# Export only databases
+notion-to-json --filter-type database
+
+# Filter by title pattern (regex)
+notion-to-json --include-pattern "Project.*2024"
+notion-to-json --exclude-pattern "Archive|Draft"
+
+# Export items modified after a date
+notion-to-json --modified-after "2024-01-01"
+
+# Combine filters
+notion-to-json --filter-type page --include-pattern "Meeting" --modified-after "2024-06-01"
+```
+
 ### Getting a Notion API Key
 
 1. Go to https://www.notion.so/my-integrations
@@ -123,7 +152,7 @@ notion-to-json/
 - [x] Phase 3: Content discovery (pages & databases)
 - [x] Phase 4: Full content retrieval
 - [x] Phase 5: JSON export functionality
-- [ ] Phase 6: CLI enhancements and distribution
+- [x] Phase 6: CLI enhancements and distribution
 
 ## License
 

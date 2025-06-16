@@ -5,9 +5,10 @@ import time
 from typing import Any
 
 import httpx
-from rich.console import Console
 
-console = Console()
+from notion_to_json.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class RateLimiter:
@@ -54,6 +55,7 @@ class NotionClient:
             headers=self._get_headers(),
             follow_redirects=True,
         )
+        logger.debug(f"Initialized NotionClient with base URL: {self.base_url}")
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers for Notion API requests.
@@ -94,6 +96,8 @@ class NotionClient:
         url = f"{self.base_url}{endpoint}"
         last_error = None
 
+        logger.debug(f"Making {method} request to {endpoint}")
+
         for attempt in range(retry_count + 1):
             try:
                 # Respect rate limit
@@ -110,7 +114,7 @@ class NotionClient:
                 # Handle rate limit errors
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", "1"))
-                    console.print(f"[yellow]Rate limited. Waiting {retry_after} seconds...[/yellow]")
+                    logger.warning(f"Rate limited. Waiting {retry_after} seconds...")
                     await asyncio.sleep(retry_after)
                     continue
 
@@ -132,7 +136,7 @@ class NotionClient:
             # Exponential backoff for retries
             if attempt < retry_count:
                 wait_time = 2 ** attempt
-                console.print(f"[yellow]Request failed. Retrying in {wait_time} seconds...[/yellow]")
+                logger.warning(f"Request failed. Retrying in {wait_time} seconds...")
                 await asyncio.sleep(wait_time)
 
         # All retries exhausted

@@ -6,10 +6,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-console = Console()
+from notion_to_json.logging import console, get_logger
+
+logger = get_logger(__name__)
 
 
 class JSONExporter:
@@ -32,6 +33,8 @@ class JSONExporter:
             "database_entries_exported": 0,
             "errors": [],
         }
+        logger.info(f"Initialized exporter with output directory: {self.output_dir}")
+        logger.debug(f"Export ID: {self.export_id}")
 
     def _sanitize_filename(self, name: str) -> str:
         """Sanitize a filename to be filesystem-safe.
@@ -69,7 +72,7 @@ class JSONExporter:
 
         # For pages
         if "properties" in obj:
-            for prop_name, prop_value in obj["properties"].items():
+            for _prop_name, prop_value in obj["properties"].items():
                 if prop_value.get("type") == "title":
                     title_array = prop_value.get("title", [])
                     if title_array and "plain_text" in title_array[0]:
@@ -115,6 +118,7 @@ class JSONExporter:
         if "blocks" in page_content:
             self.statistics["blocks_exported"] += len(page_content["blocks"])
 
+        logger.debug(f"Saved page '{title}' to {filepath}")
         return filepath
 
     def save_database(self, database_schema: dict, database_entries: list[dict]) -> Path:
@@ -232,7 +236,7 @@ class JSONExporter:
                     total=len(pages),
                 )
 
-                for i, page in enumerate(pages):
+                for _i, page in enumerate(pages):
                     try:
                         page_id = page.get("id")
                         title = self._extract_title(page)
@@ -267,7 +271,7 @@ class JSONExporter:
                     total=len(databases),
                 )
 
-                for i, database in enumerate(databases):
+                for _i, database in enumerate(databases):
                     try:
                         db_id = database.get("id")
                         title = self._extract_title(database)

@@ -5,15 +5,40 @@ build-backend = "hatchling.build"
 [project]
 name = "notion-to-json"
 version = "0.1.0"
-description = "Export Notion pages and databases to JSON"
+description = "Export Notion pages and databases to JSON with filtering and advanced options"
 readme = "README.md"
 requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Jon Atkinson", email = "jon@jonatkinson.co.uk"},
+]
+maintainers = [
+    {name = "Jon Atkinson", email = "jon@jonatkinson.co.uk"},
+]
+keywords = ["notion", "export", "json", "backup", "api"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console", 
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+    "Topic :: Utilities",
+]
 dependencies = [
     "httpx>=0.27.0",
     "rich>=13.7.0",
     "click>=8.1.7",
     "python-dotenv>=1.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jonatkinson/notion-to-json"
+Repository = "https://github.com/jonatkinson/notion-to-json"
+Issues = "https://github.com/jonatkinson/notion-to-json/issues"
 
 [project.scripts]
 notion-to-json = "notion_to_json.cli:main"
