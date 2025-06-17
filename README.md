@@ -1,5 +1,9 @@
 # Notion to JSON Exporter
 
+[![PyPI version](https://badge.fury.io/py/notion-to-json.svg)](https://badge.fury.io/py/notion-to-json)
+[![Test](https://github.com/jonatkinson/notion-to-json/actions/workflows/test.yml/badge.svg)](https://github.com/jonatkinson/notion-to-json/actions/workflows/test.yml)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+
 Export your entire Notion workspace to JSON format with a simple command-line tool.
 
 ## Features
@@ -13,21 +17,28 @@ Export your entire Notion workspace to JSON format with a simple command-line to
 
 ## Installation
 
-### Using uv (recommended)
+### From PyPI
+
+```bash
+# Using pip
+pip install notion-to-json
+
+# Using uv
+uv pip install notion-to-json
+
+# Using uvx (no installation needed)
+uvx notion-to-json --api-key YOUR_API_KEY
+```
+
+### From source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/notion-to-json.git
+git clone https://github.com/jonatkinson/notion-to-json.git
 cd notion-to-json
 
 # Install dependencies
 uv sync
-```
-
-### Using uvx (direct execution)
-
-```bash
-uvx notion-to-json --api-key YOUR_API_KEY
 ```
 
 ## Usage
