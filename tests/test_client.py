@@ -43,7 +43,7 @@ class TestRateLimiter:
 
         # Each request should be at least 0.1 seconds apart
         for i in range(1, len(times)):
-            assert times[i] - times[i-1] >= 0.09
+            assert times[i] - times[i - 1] >= 0.09
 
 
 class TestNotionClient:
@@ -118,9 +118,7 @@ class TestNotionClient:
         # Mock server error followed by success
         mock_error = Mock()
         mock_error.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Server Error",
-            request=Mock(),
-            response=Mock(status_code=500)
+            "Server Error", request=Mock(), response=Mock(status_code=500)
         )
 
         mock_success = Mock()
@@ -144,9 +142,7 @@ class TestNotionClient:
         # Mock client error
         mock_error = Mock()
         mock_error.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Bad Request",
-            request=Mock(),
-            response=Mock(status_code=400)
+            "Bad Request", request=Mock(), response=Mock(status_code=400)
         )
 
         mock_request = AsyncMock(return_value=mock_error)

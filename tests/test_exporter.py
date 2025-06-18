@@ -44,20 +44,11 @@ class TestJSONExporter:
         exporter = JSONExporter(tmp_path)
 
         # Test database title
-        database = {
-            "title": [{"plain_text": "My Database"}]
-        }
+        database = {"title": [{"plain_text": "My Database"}]}
         assert exporter._extract_title(database) == "My Database"
 
         # Test page title
-        page = {
-            "properties": {
-                "title": {
-                    "type": "title",
-                    "title": [{"plain_text": "My Page"}]
-                }
-            }
-        }
+        page = {"properties": {"title": {"type": "title", "title": [{"plain_text": "My Page"}]}}}
         assert exporter._extract_title(page) == "My Page"
 
         # Test empty object
@@ -69,20 +60,10 @@ class TestJSONExporter:
 
         page_metadata = {
             "id": "123456789",
-            "properties": {
-                "title": {
-                    "type": "title",
-                    "title": [{"plain_text": "Test Page"}]
-                }
-            }
+            "properties": {"title": {"type": "title", "title": [{"plain_text": "Test Page"}]}},
         }
 
-        page_content = {
-            "blocks": [
-                {"id": "block1", "type": "paragraph"},
-                {"id": "block2", "type": "heading_1"}
-            ]
-        }
+        page_content = {"blocks": [{"id": "block1", "type": "paragraph"}, {"id": "block2", "type": "heading_1"}]}
 
         filepath = exporter.save_page(page_metadata, page_content)
 
@@ -109,17 +90,9 @@ class TestJSONExporter:
         """Test saving a database to JSON file."""
         exporter = JSONExporter(tmp_path)
 
-        database_schema = {
-            "id": "db123456",
-            "title": [{"plain_text": "Test Database"}],
-            "properties": {}
-        }
+        database_schema = {"id": "db123456", "title": [{"plain_text": "Test Database"}], "properties": {}}
 
-        database_entries = [
-            {"id": "entry1"},
-            {"id": "entry2"},
-            {"id": "entry3"}
-        ]
+        database_entries = [{"id": "entry1"}, {"id": "entry2"}, {"id": "entry3"}]
 
         filepath = exporter.save_database(database_schema, database_entries)
 
@@ -151,12 +124,7 @@ class TestJSONExporter:
                 "id": "page1",
                 "url": "https://notion.so/page1",
                 "last_edited_time": "2024-01-01",
-                "properties": {
-                    "title": {
-                        "type": "title",
-                        "title": [{"plain_text": "Page 1"}]
-                    }
-                }
+                "properties": {"title": {"type": "title", "title": [{"plain_text": "Page 1"}]}},
             }
         ]
 
@@ -165,7 +133,7 @@ class TestJSONExporter:
                 "id": "db1",
                 "url": "https://notion.so/db1",
                 "last_edited_time": "2024-01-02",
-                "title": [{"plain_text": "Database 1"}]
+                "title": [{"plain_text": "Database 1"}],
             }
         ]
 
@@ -199,28 +167,15 @@ class TestJSONExporter:
         # Mock page data
         mock_client.get_page.return_value = {
             "id": "page123",
-            "properties": {
-                "title": {
-                    "type": "title",
-                    "title": [{"plain_text": "Test Page"}]
-                }
-            }
+            "properties": {"title": {"type": "title", "title": [{"plain_text": "Test Page"}]}},
         }
 
-        mock_client.get_page_content_recursive.return_value = {
-            "blocks": [{"id": "block1"}]
-        }
+        mock_client.get_page_content_recursive.return_value = {"blocks": [{"id": "block1"}]}
 
         # Mock database data
-        mock_client.get_database.return_value = {
-            "id": "db456",
-            "title": [{"plain_text": "Test DB"}]
-        }
+        mock_client.get_database.return_value = {"id": "db456", "title": [{"plain_text": "Test DB"}]}
 
-        mock_client.get_all_database_entries.return_value = [
-            {"id": "entry1"},
-            {"id": "entry2"}
-        ]
+        mock_client.get_all_database_entries.return_value = [{"id": "entry1"}, {"id": "entry2"}]
 
         # Pages and databases to export
         pages = [{"id": "page123"}]

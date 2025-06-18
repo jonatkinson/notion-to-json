@@ -135,7 +135,7 @@ class NotionClient:
 
             # Exponential backoff for retries
             if attempt < retry_count:
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 logger.warning(f"Request failed. Retrying in {wait_time} seconds...")
                 await asyncio.sleep(wait_time)
 

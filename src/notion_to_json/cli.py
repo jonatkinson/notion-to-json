@@ -425,8 +425,10 @@ async def export_workspace(
                 pages = filter_items(pages, include_pattern, exclude_pattern, modified_after)
                 databases = filter_items(databases, include_pattern, exclude_pattern, modified_after)
 
-                logger.info(f"After filtering: {len(pages)}/{original_page_count} pages, "
-                          f"{len(databases)}/{original_db_count} databases")
+                logger.info(
+                    f"After filtering: {len(pages)}/{original_page_count} pages, "
+                    f"{len(databases)}/{original_db_count} databases"
+                )
 
             console.print(f"\n[bold]Will export {len(pages)} pages and {len(databases)} databases[/bold]")
 
@@ -581,14 +583,16 @@ def main(
             sys.exit(1)
 
         # Export workspace with filters
-        asyncio.run(export_workspace(
-            api_key,
-            output_dir,
-            filter_type=filter_type,
-            include_pattern=include_pattern,
-            exclude_pattern=exclude_pattern,
-            modified_after=modified_after,
-        ))
+        asyncio.run(
+            export_workspace(
+                api_key,
+                output_dir,
+                filter_type=filter_type,
+                include_pattern=include_pattern,
+                exclude_pattern=exclude_pattern,
+                modified_after=modified_after,
+            )
+        )
 
 
 if __name__ == "__main__":
