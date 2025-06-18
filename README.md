@@ -1,6 +1,6 @@
 # Notion to JSON Exporter
 
-[![PyPI version](https://badge.fury.io/py/notion-to-json.svg)](https://badge.fury.io/py/notion-to-json)
+[![PyPI version](https://img.shields.io/pypi/v/notion-to-json.svg)](https://pypi.org/project/notion-to-json/)
 [![Test](https://github.com/jonatkinson/notion-to-json/actions/workflows/test.yml/badge.svg)](https://github.com/jonatkinson/notion-to-json/actions/workflows/test.yml)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 
